@@ -30,12 +30,12 @@ import argparse # pylint: disable=C0413
 import sys # pylint: disable=C0413
 from termcolor import colored
 
-import lib.base3 # pylint: disable=C0413
-import lib.db_sqlite3 # pylint: disable=C0413
-import lib.shell3 # pylint: disable=C0413
-import lib.time3 # pylint: disable=C0413
-import lib.txt3 # pylint: disable=C0413
-from lib.globals3 import STATE_OK, STATE_UNKNOWN # pylint: disable=C0413
+import lib.base # pylint: disable=C0413
+import lib.db_sqlite # pylint: disable=C0413
+import lib.shell # pylint: disable=C0413
+import lib.time # pylint: disable=C0413
+import lib.txt # pylint: disable=C0413
+from lib.globals import STATE_OK, STATE_UNKNOWN # pylint: disable=C0413
 
 
 __author__ = 'Linuxfabrik GmbH, Zurich/Switzerland'
@@ -139,13 +139,13 @@ def parse_args():
 def get_latest(args):
     """Get latest audit from local STIG database (SQLite).
     """
-    success, conn = lib.db_sqlite3.connect(path=args.PATH, filename='stig.db')
+    success, conn = lib.db_sqlite.connect(path=args.PATH, filename='stig.db')
     if not success:
         return False
 
     # Get a list of matching profile remediations from the STIG database
     if args.PROFILE_VERSION == 'latest':
-        success, result = lib.db_sqlite3.select(
+        success, result = lib.db_sqlite.select(
             conn,
             """SELECT profile_version
             FROM profile
@@ -157,17 +157,17 @@ def get_latest(args):
                 'profile_name': args.PROFILE_NAME,
             },
         )
-        lib.db_sqlite3.close(conn)
+        lib.db_sqlite.close(conn)
         return result[0]['profile_version']
 
-    lib.db_sqlite3.close(conn)
+    lib.db_sqlite.close(conn)
     return args.PROFILE_VERSION
 
 
 def get_audits(args):
     """Get audits from local STIG database (SQLite).
     """
-    success, conn = lib.db_sqlite3.connect(path=args.PATH, filename='stig.db')
+    success, conn = lib.db_sqlite.connect(path=args.PATH, filename='stig.db')
     if not success:
         return False
 
@@ -188,19 +188,19 @@ def get_audits(args):
     sql += 'ORDER BY exec_order ASC'
     data['profile_name'] = args.PROFILE_NAME
     data['profile_version'] = get_latest(args)
-    success, result = lib.db_sqlite3.select(conn, sql, data)
+    success, result = lib.db_sqlite.select(conn, sql, data)
     if not success:
         # error accessing or querying the cache
-        lib.db_sqlite3.close(conn)
+        lib.db_sqlite.close(conn)
         return False
 
     if not result or result is None:
         # key not found
-        lib.db_sqlite3.close(conn)
+        lib.db_sqlite.close(conn)
         return False
 
     # return the value
-    lib.db_sqlite3.close(conn)
+    lib.db_sqlite.close(conn)
     return result
 
 
@@ -258,7 +258,7 @@ def main():
     # get all audits that has to be done
     audits = get_audits(args)
     if not audits:
-        lib.base3.oao('No audit tasks found.')
+        lib.base.oao('No audit tasks found.')
 
     # init some vars
     total_score = 0
@@ -273,12 +273,12 @@ def main():
         args.USERNAME,
         args.HOSTNAME,
     )
-    stdout, stderr, retc = lib.base3.coe(lib.shell3.shell_exec(cmd))
+    stdout, stderr, retc = lib.base.coe(lib.shell.shell_exec(cmd))
     cmd = 'scp audits/lib-apache-httpd.sh {}@{}:/tmp/'.format(
         args.USERNAME,
         args.HOSTNAME,
     )
-    stdout, stderr, retc = lib.base3.coe(lib.shell3.shell_exec(cmd))
+    stdout, stderr, retc = lib.base.coe(lib.shell.shell_exec(cmd))
     # The scp utility exits 0 on success, and >0 if an error occurs.
     if retc != 0:
         print(f'The command "{cmd}" failed with:\n{stderr}')
@@ -306,7 +306,7 @@ def main():
                     args.HOSTNAME,
                     audit['audit_name'],
             )
-            stdout, stderr, retc = lib.base3.coe(lib.shell3.shell_exec(cmd, shell=True))
+            stdout, stderr, retc = lib.base.coe(lib.shell.shell_exec(cmd, shell=True))
             # ssh exits with the exit status of the remote command or with 255 if an error occurred.
             if retc == 255:
                 print(f'The command "{cmd}" failed with:\n{stderr}')
@@ -342,13 +342,13 @@ def main():
         msg += '{}\n\n\n'.format(prolog.strip())
     msg += 'Summary Table\n-------------\n\n'
     if args.LENGTHY:
-        msg += lib.base3.get_table(
+        msg += lib.base.get_table(
             table_values,
             ['control_name', 'audit_name', 'scored', 'level', 'result'],
             header=['Control', 'Script', 'Scoring', 'Lvl', 'Result'],
         )
     else:
-        msg += lib.base3.get_table(
+        msg += lib.base.get_table(
             table_values,
             ['control_name', 'result'],
             header=['Control', 'Result'],
@@ -360,24 +360,24 @@ def main():
         args.PROFILE_NAME,
         get_latest(args),
         args.HOSTNAME,
-        lib.time3.now(as_type='iso'),
+        lib.time.now(as_type='iso'),
     )
 
     if total_score:
         msg += '* Score:     {}/{} {} ({}%)\n* Grade:     {}'.format(
             host_score,
             total_score,
-            lib.txt3.pluralize('point', total_score),
+            lib.txt.pluralize('point', total_score),
             percentage,
             get_grade(percentage),
         )
 
     # over and out
-    lib.base3.oao(msg)
+    lib.base.oao(msg)
 
 
 if __name__ == '__main__':
     try:
         main()
     except Exception:   # pylint: disable=W0703
-        lib.base3.cu()
+        lib.base.cu()
