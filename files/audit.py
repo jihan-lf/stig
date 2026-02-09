@@ -50,10 +50,12 @@ DEFAULT_LENGTHY = False
 DEFAULT_PATH = '.'
 DEFAULT_USERNAME = 'root'
 
+#NOTE: check what profiles are still needed
 STIG_PROFILES = [
     'CIS Apache HTTP Server 2.4',
     'CIS CentOS Linux 7',
     'CIS CentOS Linux 8',
+    'CIS Rocky Linux 9',
 ]
 
 # list of result codes
@@ -174,7 +176,7 @@ def get_audits(args):
     data = {}
     sql = """SELECT *
         FROM profile as p
-        LEFT JOIN control as c ON p.control_id = c.id
+        LEFT JOIN audit as a ON p.id = a.id
         WHERE
           profile_name = :profile_name
           and profile_version = :profile_version
@@ -185,7 +187,7 @@ def get_audits(args):
     if args.CONTROL_NAME_EXCLUDE:
         sql += 'and control_name NOT REGEXP :control_name_exclude\n'
         data['control_name_exclude'] = args.CONTROL_NAME_EXCLUDE
-    sql += 'ORDER BY exec_order ASC'
+    sql += 'ORDER BY a.exec_order ASC'
     data['profile_name'] = args.PROFILE_NAME
     data['profile_version'] = get_latest(args)
     success, result = lib.db_sqlite.select(conn, sql, data)
@@ -300,7 +302,7 @@ def main():
         print('{}% ({}){}'.format(round(progress), audit['control_name'], ' '*40) , end='\r')
         progress += increase
 
-        if audit['audit_name'] and os.path.isfile('audits/' + audit['audit_name']) and audit['control_id']:
+        if audit['audit_name'] and os.path.isfile('audits/' + audit['audit_name']) and audit['id']:
             cmd = 'ssh {}@{} "sudo bash -s --" < audits/{}'.format(
                     args.USERNAME,
                     args.HOSTNAME,
