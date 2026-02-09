@@ -65,6 +65,13 @@ SKIP = 2   # not applicable
 TODO = 4   # needs to be implemented
 REV = 8    # review manually
 
+# profile name -> (os_name, version_prefix)
+PROFILE_OS_MAP = {
+    'CIS Rocky Linux 9': ('Rocky Linux', '9'),
+    'CIS CentOS Linux 8': ('CentOS Linux', '8'),
+    'CIS CentOS Linux 7': ('CentOS Linux', '7'),
+}
+
 
 def parse_args():
     """Parse command line arguments using argparse.
@@ -247,6 +254,22 @@ def get_grade(percentage):
     return colored('F', 'red', attrs=['bold'])
 
 
+def get_remote_os(username, hostname):
+    """get os name and version from remote host via /etc/os-release."""
+    cmd = 'ssh {}@{} "cat /etc/os-release"'.format(username, hostname)
+    stdout, stderr, retc = lib.base.coe(lib.shell.shell_exec(cmd, shell=True))
+    if retc != 0:
+        return None, None
+    os_name = None
+    os_version = None
+    for line in stdout.splitlines():
+        if line.startswith('NAME='):
+            os_name = line.split('=', 1)[1].strip('"\'')
+        elif line.startswith('VERSION_ID='):
+            os_version = line.split('=', 1)[1].strip('"\'')
+    return os_name, os_version
+
+
 def main():
     """The main function. Hier spielt die Musik.
     """
@@ -269,6 +292,18 @@ def main():
     prolog = ''
 
     msg = 'Audit Result\n============\n\n'
+
+    # verify remote os matches profile
+    if args.PROFILE_NAME in PROFILE_OS_MAP:
+        expected_os, expected_ver = PROFILE_OS_MAP[args.PROFILE_NAME]
+        detected_os, detected_ver = get_remote_os(args.USERNAME, args.HOSTNAME)
+        if detected_os and detected_ver:
+            if detected_os != expected_os or not detected_ver.startswith(expected_ver):
+                print(colored(
+                    f'Warning: OS mismatch - detected "{detected_os} {detected_ver}", '
+                    f'expected "{expected_os} {expected_ver}*"',
+                    'yellow',
+                ))
 
     # prepare the host, copy shell libraries
     cmd = 'scp audits/lib.sh {}@{}:/tmp/'.format(
