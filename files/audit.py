@@ -270,6 +270,40 @@ def get_remote_os(username, hostname):
     return os_name, os_version
 
 
+
+def check_prerequisites(username, hostname):
+    """Validate SSH connectivity and passwordless sudo access.
+    
+    Args:
+        username: SSH username
+        hostname: Remote hostname or IP
+        
+    Returns:
+        tuple: (success: bool, error_message: str)
+    """
+    # Test 1: Basic SSH connectivity
+    cmd = 'ssh -o ConnectTimeout=5 -o BatchMode=yes {}@{} "echo test" 2>&1'.format(username, hostname)
+    stdout, stderr, retc = lib.base.coe(lib.shell.shell_exec(cmd, shell=True))
+    
+    if retc != 0:
+        if 'Permission denied' in stderr or 'No route to host' in stderr or 'Connection refused' in stderr:
+            return False, f'SSH connection failed: Cannot connect to {username}@{hostname}. Check SSH keys and network connectivity.'
+        return False, f'SSH connection failed: {stderr.strip()}'
+    
+    # Test 2: Passwordless sudo
+    cmd = 'ssh {}@{} "sudo -n true" 2>&1'.format(username, hostname)
+    stdout, stderr, retc = lib.base.coe(lib.shell.shell_exec(cmd, shell=True))
+    
+    if retc != 0:
+        if 'a password is required' in stderr or 'a terminal is required' in stderr:
+            return False, (
+                f'Passwordless sudo is not configured for {username}@{hostname}.\n'
+                f'Fix: Add "{username} ALL=(ALL) NOPASSWD: ALL" to /etc/sudoers on the remote host.'
+            )
+        return False, f'Sudo check failed: {stderr.strip()}'
+    
+    return True, ''
+
 def main():
     """The main function. Hier spielt die Musik.
     """
@@ -305,6 +339,12 @@ def main():
                     'yellow',
                 ))
 
+    prereq_ok, prereq_error = check_prerequisites(args.USERNAME, args.HOSTNAME)
+    if not prereq_ok:
+        print(colored('FAILED', 'red'))
+        print(colored('\nError: ' + prereq_error, 'red'))
+        sys.exit(STATE_UNKNOWN)
+    print(colored('OK', 'green'))
     # prepare the host, copy shell libraries
     cmd = 'scp audits/lib.sh {}@{}:/tmp/'.format(
         args.USERNAME,
